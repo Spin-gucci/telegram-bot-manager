@@ -1,0 +1,24 @@
+{
+  "name": "telegram-bot-manager",
+  "version": "1.0.0",
+  "description": "Website untuk mengatur Telegram bot detektor pesan duplikat",
+  "main": "api/bot.js",
+  "scripts": {
+    "start": "node api/bot.js",
+    "dev": "nodemon api/bot.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-telegram-bot-api": "^0.61.0",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
