@@ -3,159 +3,481 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Bot Manager - Deteksi Pesan Duplikat</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Telegram Bot Manager</title>
+    <style>
+        /* CSS dasar untuk menghindari halaman putih */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+        
+        .loading {
+            color: #667eea;
+            font-size: 1.2rem;
+            margin: 20px 0;
+        }
+        
+        .error {
+            color: #e74c3c;
+            background: #ffeaea;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-success {
+            background: #48bb78;
+        }
+        
+        .btn-success:hover {
+            background: #38a169;
+        }
+        
+        .btn-danger {
+            background: #f56565;
+        }
+        
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-weight: 600;
+        }
+        
+        .status-active {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 2px solid #9ae6b4;
+        }
+        
+        .status-inactive {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 2px solid #fc8181;
+        }
+        
+        .bot-info {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .info-item {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .info-label {
+            color: #666;
+            font-weight: 600;
+        }
+        
+        .info-value {
+            color: #333;
+        }
+        
+        .instructions {
+            background: #ebf8ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        
+        .instructions h3 {
+            color: #2b6cb0;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+            color: #4a5568;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1><i class="fas fa-robot"></i> Telegram Bot Manager</h1>
-            <p class="subtitle">Kelola bot Telegram untuk mendeteksi pesan duplikat dalam grup</p>
-        </header>
-
-        <main>
-            <div class="card">
-                <h2><i class="fas fa-cogs"></i> Konfigurasi Bot</h2>
-                <div class="form-group">
-                    <label for="botToken"><i class="fas fa-key"></i> Token Bot Telegram</label>
-                    <input type="password" id="botToken" placeholder="Masukkan token bot (contoh: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz)">
-                    <div class="token-help">
-                        <p><i class="fas fa-info-circle"></i> Dapatkan token dari <a href="https://t.me/BotFather" target="_blank">@BotFather</a> di Telegram</p>
+        <h1>🤖 Telegram Bot Manager</h1>
+        <p class="subtitle">Deteksi Pesan Duplikat dalam Grup Telegram</p>
+        
+        <div id="loading" class="loading">
+            Memuat aplikasi...
+        </div>
+        
+        <div id="error" class="error">
+            Terjadi kesalahan. Silakan refresh halaman.
+        </div>
+        
+        <div id="mainContent" class="hidden">
+            <!-- Status Bot -->
+            <div id="botStatus" class="status status-inactive">
+                ⚪ Bot tidak aktif
+            </div>
+            
+            <!-- Form Token -->
+            <div class="form-group">
+                <label for="botToken">Token Bot Telegram:</label>
+                <input type="password" id="botToken" 
+                       placeholder="Contoh: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz">
+            </div>
+            
+            <!-- Tombol Aksi -->
+            <button id="startBtn" class="btn" onclick="startBot()">
+                🚀 Aktifkan Bot
+            </button>
+            <button id="stopBtn" class="btn btn-danger hidden" onclick="stopBot()">
+                ⏹️ Hentikan Bot
+            </button>
+            
+            <!-- Info Bot -->
+            <div id="botInfo" class="bot-info hidden">
+                <h3>Informasi Bot</h3>
+                <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <span id="statusText" class="info-value">Tidak aktif</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">ID Bot:</span>
+                    <span id="botId" class="info-value">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Pesan Diproses:</span>
+                    <span id="messagesCount" class="info-value">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Duplikat Terdeteksi:</span>
+                    <span id="duplicatesCount" class="info-value">0</span>
+                </div>
+            </div>
+            
+            <!-- Contoh Deteksi -->
+            <div class="instructions">
+                <h3>📋 Contoh Deteksi Duplikat</h3>
+                <p>Bot akan mendeteksi pesan seperti:</p>
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0; font-family: monospace;">
+                    <div style="color: #e53e3e;">⚠️ <strong>Ini sudah tercatat</strong></div>
+                    <div>Konten yang terulang: 62881037600892</div>
+                    <div style="margin-top: 10px;">
+                        <div>• Pengirim pertama: User A - 2026/01/01 14:05:26 (pertama kali)</div>
+                        <div>• Pengirim saat ini: User B - 2026/02/08 18:24:02 (kali ini)</div>
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label for="botName"><i class="fas fa-signature"></i> Nama Bot (opsional)</label>
-                    <input type="text" id="botName" placeholder="Masukkan nama untuk bot Anda">
-                </div>
-
-                <div class="form-group">
-                    <label for="webhookUrl"><i class="fas fa-link"></i> Webhook URL (otomatis)</label>
-                    <input type="text" id="webhookUrl" readonly>
-                    <button class="btn-secondary" onclick="copyWebhookUrl()">
-                        <i class="fas fa-copy"></i> Salin
-                    </button>
-                </div>
-
-                <div class="button-group">
-                    <button id="startBot" class="btn-primary" onclick="startBot()">
-                        <i class="fas fa-play"></i> Mulai Bot
-                    </button>
-                    <button id="stopBot" class="btn-danger" onclick="stopBot()">
-                        <i class="fas fa-stop"></i> Hentikan Bot
-                    </button>
-                    <button id="testBot" class="btn-secondary" onclick="testBot()">
-                        <i class="fas fa-vial"></i> Test Bot
-                    </button>
-                </div>
             </div>
-
-            <div class="card">
-                <h2><i class="fas fa-info-circle"></i> Status Bot</h2>
-                <div id="botStatus" class="status status-inactive">
-                    <i class="fas fa-circle"></i> Bot tidak aktif
-                </div>
-                <div class="status-info">
-                    <p><strong>Bot ID:</strong> <span id="botId">-</span></p>
-                    <p><strong>Nama Bot:</strong> <span id="displayBotName">-</span></p>
-                    <p><strong>Terakhir diupdate:</strong> <span id="lastUpdate">-</span></p>
-                    <p><strong>Pesan diproses:</strong> <span id="messagesProcessed">0</span></p>
-                    <p><strong>Duplikat terdeteksi:</strong> <span id="duplicatesDetected">0</span></p>
-                </div>
+            
+            <!-- Instruksi -->
+            <div class="instructions">
+                <h3>📚 Cara Menggunakan:</h3>
+                <ol>
+                    <li>Dapatkan token dari @BotFather di Telegram</li>
+                    <li>Masukkan token di atas</li>
+                    <li>Klik "Aktifkan Bot"</li>
+                    <li>Tambahkan bot ke grup Anda</li>
+                    <li>Berikan izin admin untuk membaca pesan</li>
+                    <li>Bot akan otomatis mendeteksi duplikat</li>
+                </ol>
             </div>
-
-            <div class="card">
-                <h2><i class="fas fa-exclamation-triangle"></i> Contoh Deteksi Duplikat</h2>
-                <div class="example">
-                    <div class="message-example">
-                        <div class="message-header">
-                            <span class="sender">Bot Detector</span>
-                            <span class="timestamp">2026/02/08 18:24:02</span>
-                        </div>
-                        <div class="message-content warning">
-                            <i class="fas fa-exclamation-triangle"></i> <strong>⚠️ Ini sudah tercatat</strong><br>
-                            <strong>Konten yang terulang:</strong> 62881037600892<br>
-                            <strong>Rekam sejarah:</strong><br>
-                            <div class="history">
-                                • Pengirim pertama: User A - 2026/01/01 14:05:26 (pertama kali)<br>
-                                • Pengirim saat ini: User B - 2026/02/08 18:24:02 (kali ini)
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <p class="example-description">
-                    Bot akan mendeteksi pesan dengan konten yang sama (termasuk nomor telepon, tautan, atau teks) 
-                    yang dikirim oleh pengguna berbeda dalam grup, dan memberikan notifikasi seperti contoh di atas.
-                </p>
-            </div>
-
-            <div class="card">
-                <h2><i class="fas fa-history"></i> Log Aktivitas Terbaru</h2>
-                <div id="activityLog" class="log-container">
-                    <div class="log-entry">
-                        <span class="log-time">18:20:05</span>
-                        <span class="log-message">Menunggu token bot...</span>
-                    </div>
-                </div>
-                <button class="btn-secondary" onclick="clearLogs()">
-                    <i class="fas fa-trash"></i> Hapus Log
-                </button>
-            </div>
-        </main>
-
-        <footer>
-            <p>Telegram Bot Manager &copy; 2026 | Deployed on Vercel</p>
-            <p class="footer-links">
-                <a href="#" onclick="showInstructions()"><i class="fas fa-book"></i> Panduan</a>
-                <a href="#" onclick="showAbout()"><i class="fas fa-info-circle"></i> Tentang</a>
-                <a href="https://vercel.com" target="_blank"><i class="fas fa-cloud"></i> Vercel</a>
-            </p>
-        </footer>
-    </div>
-
-    <!-- Modal untuk instruksi -->
-    <div id="instructionsModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal('instructionsModal')">&times;</span>
-            <h2><i class="fas fa-book"></i> Panduan Penggunaan</h2>
-            <ol>
-                <li>Dapatkan token bot Telegram dari <a href="https://t.me/BotFather" target="_blank">@BotFather</a></li>
-                <li>Masukkan token ke dalam form konfigurasi</li>
-                <li>Klik "Mulai Bot" untuk mengaktifkan bot</li>
-                <li>Tambahkan bot ke grup Telegram yang ingin dipantau</li>
-                <li>Berikan izin admin kepada bot untuk membaca pesan</li>
-                <li>Bot akan otomatis mendeteksi pesan duplikat dalam grup</li>
-                <li>Gunakan dashboard untuk memantau aktivitas bot</li>
-            </ol>
-            <p><strong>Catatan:</strong> Bot hanya akan menyimpan dan membandingkan konten pesan teks. Pesan media (gambar, video, dokumen) tidak akan diproses.</p>
         </div>
     </div>
 
-    <!-- Modal tentang -->
-    <div id="aboutModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal('aboutModal')">&times;</span>
-            <h2><i class="fas fa-info-circle"></i> Tentang Aplikasi</h2>
-            <p>Aplikasi ini memungkinkan Anda mengelola bot Telegram yang dapat mendeteksi pesan duplikat dalam grup.</p>
-            <p><strong>Fitur:</strong></p>
-            <ul>
-                <li>Mendeteksi pesan dengan konten identik yang dikirim oleh pengguna berbeda</li>
-                <li>Mencatat sejarah pesan dengan tanggal, waktu, dan pengirim</li>
-                <li>Memberikan notifikasi real-time ketika duplikat terdeteksi</li>
-                <li>Dashboard untuk memantau status dan aktivitas bot</li>
-                <li>Deploy mudah melalui Vercel</li>
-            </ul>
-            <p>Aplikasi ini menggunakan teknologi:</p>
-            <ul>
-                <li>Node.js + Express untuk backend</li>
-                <li>SQLite untuk penyimpanan data</li>
-                <li>Telegram Bot API</li>
-                <li>Vercel untuk hosting</li>
-            </ul>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
+    <script>
+        // Variabel global
+        let botActive = false;
+        let botData = {};
+        
+        // Inisialisasi saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Halaman dimuat');
+            
+            // Sembunyikan loading setelah 1 detik
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('mainContent').classList.remove('hidden');
+                
+                // Cek status dari localStorage
+                loadFromLocalStorage();
+                updateUI();
+                
+                // Cek koneksi API
+                checkAPI();
+            }, 1000);
+        });
+        
+        // Cek koneksi API
+        async function checkAPI() {
+            try {
+                const response = await fetch('/api/health');
+                if (!response.ok) throw new Error('API tidak merespon');
+                console.log('API terhubung');
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Tidak dapat terhubung ke server. Pastikan aplikasi berjalan di Vercel.');
+            }
+        }
+        
+        // Fungsi untuk memulai bot
+        async function startBot() {
+            const token = document.getElementById('botToken').value.trim();
+            
+            if (!token) {
+                alert('Masukkan token bot terlebih dahulu!');
+                return;
+            }
+            
+            if (!token.includes(':')) {
+                alert('Format token tidak valid!');
+                return;
+            }
+            
+            try {
+                showLoading();
+                
+                const response = await fetch('/api/bot/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        botToken: token,
+                        botName: 'Duplicate Detector Bot'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    botActive = true;
+                    botData = {
+                        token: token,
+                        id: data.botInfo.id,
+                        name: data.botInfo.name,
+                        messagesProcessed: 0,
+                        duplicatesDetected: 0
+                    };
+                    
+                    saveToLocalStorage();
+                    updateUI();
+                    
+                    alert('✅ Bot berhasil diaktifkan!\n\nSekarang tambahkan bot ke grup Telegram Anda dan berikan izin admin untuk membaca pesan.');
+                } else {
+                    throw new Error(data.error || 'Gagal mengaktifkan bot');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Gagal mengaktifkan bot: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // Fungsi untuk menghentikan bot
+        async function stopBot() {
+            if (!confirm('Apakah Anda yakin ingin menghentikan bot?')) {
+                return;
+            }
+            
+            try {
+                showLoading();
+                
+                const response = await fetch('/api/bot/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        botToken: botData.token
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    botActive = false;
+                    updateUI();
+                    alert('✅ Bot berhasil dihentikan.');
+                } else {
+                    throw new Error(data.error || 'Gagal menghentikan bot');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Gagal menghentikan bot: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // Update tampilan UI
+        function updateUI() {
+            const statusElement = document.getElementById('botStatus');
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const botInfo = document.getElementById('botInfo');
+            
+            if (botActive) {
+                statusElement.className = 'status status-active';
+                statusElement.innerHTML = '✅ Bot aktif';
+                startBtn.style.display = 'none';
+                stopBtn.classList.remove('hidden');
+                botInfo.classList.remove('hidden');
+                
+                // Update info
+                document.getElementById('statusText').textContent = 'Aktif';
+                document.getElementById('botId').textContent = botData.id || '-';
+                document.getElementById('messagesCount').textContent = botData.messagesProcessed || '0';
+                document.getElementById('duplicatesCount').textContent = botData.duplicatesDetected || '0';
+            } else {
+                statusElement.className = 'status status-inactive';
+                statusElement.innerHTML = '⚪ Bot tidak aktif';
+                startBtn.style.display = 'block';
+                stopBtn.classList.add('hidden');
+                botInfo.classList.add('hidden');
+            }
+        }
+        
+        // Tampilkan error
+        function showError(message) {
+            const errorElement = document.getElementById('error');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+        
+        // Tampilkan loading
+        function showLoading() {
+            const loadingElement = document.getElementById('loading');
+            loadingElement.style.display = 'block';
+            loadingElement.textContent = 'Memproses...';
+        }
+        
+        // Sembunyikan loading
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        // Simpan ke localStorage
+        function saveToLocalStorage() {
+            localStorage.setItem('telegramBotManager', JSON.stringify({
+                botActive: botActive,
+                botData: botData
+            }));
+        }
+        
+        // Muat dari localStorage
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('telegramBotManager');
+            if (saved) {
+                const data = JSON.parse(saved);
+                botActive = data.botActive;
+                botData = data.botData || {};
+                
+                // Isi token jika ada
+                if (botData.token) {
+                    document.getElementById('botToken').value = botData.token;
+                }
+            }
+        }
+        
+        // Test koneksi
+        window.testAPI = async function() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                alert('API Response: ' + JSON.stringify(data, null, 2));
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        };
+    </script>
 </body>
 </html>
