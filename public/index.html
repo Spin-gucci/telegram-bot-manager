@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Bot Manager - Deteksi Pesan Duplikat</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-robot"></i> Telegram Bot Manager</h1>
+            <p class="subtitle">Kelola bot Telegram untuk mendeteksi pesan duplikat dalam grup</p>
+        </header>
+
+        <main>
+            <div class="card">
+                <h2><i class="fas fa-cogs"></i> Konfigurasi Bot</h2>
+                <div class="form-group">
+                    <label for="botToken"><i class="fas fa-key"></i> Token Bot Telegram</label>
+                    <input type="password" id="botToken" placeholder="Masukkan token bot (contoh: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz)">
+                    <div class="token-help">
+                        <p><i class="fas fa-info-circle"></i> Dapatkan token dari <a href="https://t.me/BotFather" target="_blank">@BotFather</a> di Telegram</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="botName"><i class="fas fa-signature"></i> Nama Bot (opsional)</label>
+                    <input type="text" id="botName" placeholder="Masukkan nama untuk bot Anda">
+                </div>
+
+                <div class="form-group">
+                    <label for="webhookUrl"><i class="fas fa-link"></i> Webhook URL (otomatis)</label>
+                    <input type="text" id="webhookUrl" readonly>
+                    <button class="btn-secondary" onclick="copyWebhookUrl()">
+                        <i class="fas fa-copy"></i> Salin
+                    </button>
+                </div>
+
+                <div class="button-group">
+                    <button id="startBot" class="btn-primary" onclick="startBot()">
+                        <i class="fas fa-play"></i> Mulai Bot
+                    </button>
+                    <button id="stopBot" class="btn-danger" onclick="stopBot()">
+                        <i class="fas fa-stop"></i> Hentikan Bot
+                    </button>
+                    <button id="testBot" class="btn-secondary" onclick="testBot()">
+                        <i class="fas fa-vial"></i> Test Bot
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-info-circle"></i> Status Bot</h2>
+                <div id="botStatus" class="status status-inactive">
+                    <i class="fas fa-circle"></i> Bot tidak aktif
+                </div>
+                <div class="status-info">
+                    <p><strong>Bot ID:</strong> <span id="botId">-</span></p>
+                    <p><strong>Nama Bot:</strong> <span id="displayBotName">-</span></p>
+                    <p><strong>Terakhir diupdate:</strong> <span id="lastUpdate">-</span></p>
+                    <p><strong>Pesan diproses:</strong> <span id="messagesProcessed">0</span></p>
+                    <p><strong>Duplikat terdeteksi:</strong> <span id="duplicatesDetected">0</span></p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-exclamation-triangle"></i> Contoh Deteksi Duplikat</h2>
+                <div class="example">
+                    <div class="message-example">
+                        <div class="message-header">
+                            <span class="sender">Bot Detector</span>
+                            <span class="timestamp">2026/02/08 18:24:02</span>
+                        </div>
+                        <div class="message-content warning">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>⚠️ Ini sudah tercatat</strong><br>
+                            <strong>Konten yang terulang:</strong> 62881037600892<br>
+                            <strong>Rekam sejarah:</strong><br>
+                            <div class="history">
+                                • Pengirim pertama: User A - 2026/01/01 14:05:26 (pertama kali)<br>
+                                • Pengirim saat ini: User B - 2026/02/08 18:24:02 (kali ini)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="example-description">
+                    Bot akan mendeteksi pesan dengan konten yang sama (termasuk nomor telepon, tautan, atau teks) 
+                    yang dikirim oleh pengguna berbeda dalam grup, dan memberikan notifikasi seperti contoh di atas.
+                </p>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-history"></i> Log Aktivitas Terbaru</h2>
+                <div id="activityLog" class="log-container">
+                    <div class="log-entry">
+                        <span class="log-time">18:20:05</span>
+                        <span class="log-message">Menunggu token bot...</span>
+                    </div>
+                </div>
+                <button class="btn-secondary" onclick="clearLogs()">
+                    <i class="fas fa-trash"></i> Hapus Log
+                </button>
+            </div>
+        </main>
+
+        <footer>
+            <p>Telegram Bot Manager &copy; 2026 | Deployed on Vercel</p>
+            <p class="footer-links">
+                <a href="#" onclick="showInstructions()"><i class="fas fa-book"></i> Panduan</a>
+                <a href="#" onclick="showAbout()"><i class="fas fa-info-circle"></i> Tentang</a>
+                <a href="https://vercel.com" target="_blank"><i class="fas fa-cloud"></i> Vercel</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Modal untuk instruksi -->
+    <div id="instructionsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('instructionsModal')">&times;</span>
+            <h2><i class="fas fa-book"></i> Panduan Penggunaan</h2>
+            <ol>
+                <li>Dapatkan token bot Telegram dari <a href="https://t.me/BotFather" target="_blank">@BotFather</a></li>
+                <li>Masukkan token ke dalam form konfigurasi</li>
+                <li>Klik "Mulai Bot" untuk mengaktifkan bot</li>
+                <li>Tambahkan bot ke grup Telegram yang ingin dipantau</li>
+                <li>Berikan izin admin kepada bot untuk membaca pesan</li>
+                <li>Bot akan otomatis mendeteksi pesan duplikat dalam grup</li>
+                <li>Gunakan dashboard untuk memantau aktivitas bot</li>
+            </ol>
+            <p><strong>Catatan:</strong> Bot hanya akan menyimpan dan membandingkan konten pesan teks. Pesan media (gambar, video, dokumen) tidak akan diproses.</p>
+        </div>
+    </div>
+
+    <!-- Modal tentang -->
+    <div id="aboutModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('aboutModal')">&times;</span>
+            <h2><i class="fas fa-info-circle"></i> Tentang Aplikasi</h2>
+            <p>Aplikasi ini memungkinkan Anda mengelola bot Telegram yang dapat mendeteksi pesan duplikat dalam grup.</p>
+            <p><strong>Fitur:</strong></p>
+            <ul>
+                <li>Mendeteksi pesan dengan konten identik yang dikirim oleh pengguna berbeda</li>
+                <li>Mencatat sejarah pesan dengan tanggal, waktu, dan pengirim</li>
+                <li>Memberikan notifikasi real-time ketika duplikat terdeteksi</li>
+                <li>Dashboard untuk memantau status dan aktivitas bot</li>
+                <li>Deploy mudah melalui Vercel</li>
+            </ul>
+            <p>Aplikasi ini menggunakan teknologi:</p>
+            <ul>
+                <li>Node.js + Express untuk backend</li>
+                <li>SQLite untuk penyimpanan data</li>
+                <li>Telegram Bot API</li>
+                <li>Vercel untuk hosting</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
