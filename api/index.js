@@ -1,654 +1,203 @@
-const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-const cors = require('cors');
-require('dotenv').config();
 
-const app = express();
+// === CONFIGURATION ===
+const BOT_TOKEN = process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+// =====================
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// Simpan bot instances dalam memory
-const activeBots = new Map();
-const messageHistory = new Map(); // Untuk menyimpan pesan
-
-// Fungsi untuk normalisasi konten pesan
-function normalizeMessage(content) {
-    return content
-        .replace(/\s+/g, '')           // Hapus semua spasi
-        .replace(/[-+()]/g, '')        // Hapus tanda hubung dan plus
-        .toLowerCase()                  // Ubah ke huruf kecil
-        .trim();
+if (!BOT_TOKEN || BOT_TOKEN === 'YOUR_BOT_TOKEN_HERE') {
+  console.error('❌ ERROR: BOT_TOKEN not set!');
+  console.error('Please set BOT_TOKEN in Replit Secrets:');
+  console.error('1. Click on "Secrets" tab (lock icon)');
+  console.error('2. Add new secret:');
+  console.error('   Key: BOT_TOKEN');
+  console.error('   Value: Your token from @BotFather');
+  console.error('3. Restart the bot');
+  process.exit(1);
 }
 
-// Endpoint untuk mengaktifkan bot
-app.post('/api/bot/start', async (req, res) => {
-    try {
-        const { botToken, webhookUrl } = req.body;
-        
-        if (!botToken) {
-            return res.status(400).json({ error: 'Token bot diperlukan' });
-        }
+console.log('🤖 Starting Telegram Duplicate Detector Bot...');
+console.log('Token (partial):', BOT_TOKEN.substring(0, 15) + '...');
 
-        // Validasi format token
-        if (!botToken.includes(':')) {
-            return res.status(400).json({ error: 'Format token tidak valid' });
-        }
-
-        // Cek apakah bot sudah aktif
-        if (activeBots.has(botToken)) {
-            return res.json({
-                success: true,
-                message: 'Bot sudah aktif',
-                botId: botToken.split(':')[0]
-            });
-        }
-
-        // Buat instance bot dengan polling (lebih mudah untuk testing)
-        const bot = new TelegramBot(botToken, { polling: true });
-
-        // Simpan bot instance
-        activeBots.set(botToken, bot);
-        
-        // Inisialisasi message history untuk bot ini
-        messageHistory.set(botToken, new Map());
-
-        // Setup event handlers
-        setupBotHandlers(bot, botToken);
-
-        try {
-            // Dapatkan info bot
-            const botInfo = await bot.getMe();
-            
-            res.json({
-                success: true,
-                message: 'Bot berhasil diaktifkan',
-                botInfo: {
-                    id: botInfo.id,
-                    name: botInfo.first_name,
-                    username: botInfo.username
-                }
-            });
-        } catch (error) {
-            activeBots.delete(botToken);
-            throw error;
-        }
-
-    } catch (error) {
-        console.error('Error starting bot:', error.message);
-        res.status(500).json({ 
-            error: 'Gagal mengaktifkan bot',
-            details: error.message 
-        });
+// Create bot instance with POLLING
+const bot = new TelegramBot(BOT_TOKEN, {
+  polling: {
+    interval: 300,      // Check every 300ms
+    timeout: 10,
+    params: {
+      timeout: 10
     }
+  }
 });
 
-// Fungsi untuk setup bot handlers
-function setupBotHandlers(bot, botToken) {
-    console.log(`Setting up handlers for bot: ${botToken.split(':')[0]}`);
-    
-    // Handler untuk pesan baru
-    bot.on('message', async (msg) => {
-        try {
-            const chatId = msg.chat.id;
-            const messageId = msg.message_id;
-            const userId = msg.from.id;
-            const userName = msg.from.first_name || msg.from.username || 'Unknown';
-            const messageText = msg.text || '';
-            const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+// Store message history
+const messageHistory = {};
 
-            // Abaikan jika bukan grup
-            if (!isGroup) {
-                console.log(`Ignoring non-group message from ${userName}`);
-                return;
-            }
-
-            // Abaikan jika dari bot
-            if (msg.from.is_bot) {
-                return;
-            }
-
-            // Abaikan pesan kosong
-            if (!messageText.trim()) {
-                return;
-            }
-
-            console.log(`New message from ${userName} in chat ${chatId}: ${messageText.substring(0, 50)}...`);
-
-            // Normalisasi pesan
-            const normalizedContent = normalizeMessage(messageText);
-            
-            // Dapatkan history untuk chat ini
-            const botHistory = messageHistory.get(botToken);
-            if (!botHistory.has(chatId)) {
-                botHistory.set(chatId, new Map());
-            }
-            const chatHistory = botHistory.get(chatId);
-
-            // Cek apakah pesan ini duplikat
-            if (chatHistory.has(normalizedContent)) {
-                const previousMessage = chatHistory.get(normalizedContent);
-                
-                // Pastikan bukan dari pengguna yang sama
-                if (previousMessage.userId !== userId) {
-                    console.log(`Duplicate detected! Original: ${previousMessage.userName}, Current: ${userName}`);
-                    
-                    // Format pesan warning
-                    const warningMessage = formatDuplicateWarning(
-                        messageText,
-                        previousMessage,
-                        { userId, userName, timestamp: new Date() }
-                    );
-                    
-                    // Kirim pesan warning
-                    await bot.sendMessage(chatId, warningMessage, {
-                        parse_mode: 'HTML',
-                        reply_to_message_id: messageId
-                    });
-
-                    // Log ke console
-                    console.log(`Sent duplicate warning for: ${normalizedContent.substring(0, 30)}...`);
-                }
-            } else {
-                // Simpan pesan baru ke history
-                chatHistory.set(normalizedContent, {
-                    userId: userId,
-                    userName: userName,
-                    content: messageText,
-                    normalized: normalizedContent,
-                    timestamp: new Date()
-                });
-
-                // Batasi jumlah pesan yang disimpan (100 per chat)
-                if (chatHistory.size > 100) {
-                    const firstKey = chatHistory.keys().next().value;
-                    chatHistory.delete(firstKey);
-                }
-            }
-
-        } catch (error) {
-            console.error('Error handling message:', error.message);
-        }
-    });
-
-    // Handler untuk error
-    bot.on('error', (error) => {
-        console.error(`Bot error for ${botToken.split(':')[0]}:`, error.message);
-    });
-
-    // Handler untuk polling start
-    bot.on('polling_error', (error) => {
-        console.error(`Polling error for ${botToken.split(':')[0]}:`, error.message);
-    });
-
-    console.log(`Bot ${botToken.split(':')[0]} handlers setup complete`);
+// Normalize text for comparison
+function normalizeText(text) {
+  if (!text) return '';
+  return text
+    .replace(/\s+/g, '')           // Remove all spaces
+    .replace(/[-+()]/g, '')        // Remove dashes, plus, parentheses
+    .replace(/[^\w]/g, '')         // Remove special characters
+    .toLowerCase()                  // Convert to lowercase
+    .trim();
 }
 
-// Format pesan duplicate warning
-function formatDuplicateWarning(content, original, current) {
-    const formatDate = (date) => {
-        const d = new Date(date);
-        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-    };
-
-    return `
-⚠️ <b>Ini sudah tercatat</b>
-
-📝 <b>Konten yang terulang:</b> ${content}
-
-📋 <b>Rekam sejarah:</b>
-├─ <b>Pengirim pertama:</b> ${original.userName} - ${formatDate(original.timestamp)} (pertama kali)
-└─ <b>Pengirim saat ini:</b> ${current.userName} - ${formatDate(current.timestamp)} (kali ini)
-    `.trim();
+// Format date for display
+function formatDate(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}:${d.getSeconds().toString().padStart(2,'0')}`;
 }
 
-// Endpoint untuk menonaktifkan bot
-app.post('/api/bot/stop', async (req, res) => {
-    try {
-        const { botToken } = req.body;
-        
-        if (!botToken) {
-            return res.status(400).json({ error: 'Token bot diperlukan' });
-        }
-
-        const bot = activeBots.get(botToken);
-        
-        if (!bot) {
-            return res.json({
-                success: true,
-                message: 'Bot tidak aktif'
-            });
-        }
-
-        // Stop polling
-        bot.stopPolling();
-        
-        // Hapus dari memory
-        activeBots.delete(botToken);
-        messageHistory.delete(botToken);
-
-        res.json({
-            success: true,
-            message: 'Bot berhasil dihentikan'
-        });
-
-    } catch (error) {
-        console.error('Error stopping bot:', error.message);
-        res.status(500).json({ 
-            error: 'Gagal menghentikan bot',
-            details: error.message 
-        });
-    }
+// When bot starts
+bot.getMe().then((botInfo) => {
+  console.log('\n✅ BOT INFORMATION:');
+  console.log('   Name:', botInfo.first_name);
+  console.log('   Username: @' + botInfo.username);
+  console.log('   ID:', botInfo.id);
+  console.log('\n📡 STATUS: Bot is now running and listening for messages');
+  console.log('\n⚠️  IMPORTANT: Add this bot to your Telegram group and MAKE IT ADMIN!');
+  console.log('   Required permissions: ✓ Read messages ✓ Send messages');
+  console.log('\n💡 Test by sending duplicate messages in your group');
+}).catch((error) => {
+  console.error('❌ Failed to get bot info:', error.message);
 });
 
-// Endpoint untuk status bot
-app.get('/api/bot/status/:botToken', (req, res) => {
-    const botToken = req.params.botToken;
-    const bot = activeBots.get(botToken);
+// Handle incoming messages
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+  const messageId = msg.message_id;
+  const userId = msg.from.id;
+  const userName = msg.from.first_name || msg.from.username || 'Unknown';
+  const messageText = msg.text || '';
+  
+  // Log received message (for debugging)
+  console.log('\n📥 MESSAGE RECEIVED:');
+  console.log('   From:', userName, `(ID: ${userId})`);
+  console.log('   Chat:', msg.chat.title || 'Private', `(ID: ${chatId})`);
+  console.log('   Type:', msg.chat.type);
+  console.log('   Text:', messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''));
+  
+  // Skip if:
+  // 1. Message is empty
+  if (!messageText.trim()) {
+    console.log('   ⏩ Skipped: Empty message');
+    return;
+  }
+  
+  // 2. Message is from a bot
+  if (msg.from.is_bot) {
+    console.log('   ⏩ Skipped: Message from another bot');
+    return;
+  }
+  
+  // 3. Not a group chat (optional)
+  const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+  if (!isGroup) {
+    console.log('   ⏩ Skipped: Not a group message');
+    // bot.sendMessage(chatId, 'Please add me to a group to detect duplicate messages!');
+    return;
+  }
+  
+  // Normalize the message content
+  const normalizedText = normalizeText(messageText);
+  console.log('   Normalized:', normalizedText.substring(0, 50) + (normalizedText.length > 50 ? '...' : ''));
+  
+  // Initialize history for this chat if needed
+  if (!messageHistory[chatId]) {
+    messageHistory[chatId] = {};
+    console.log('   📝 Created new history for chat', chatId);
+  }
+  
+  const chatHistory = messageHistory[chatId];
+  
+  // Check if this normalized text exists in history
+  if (chatHistory[normalizedText]) {
+    const previous = chatHistory[normalizedText];
     
-    if (!bot) {
-        return res.json({
-            active: false,
-            message: 'Bot tidak aktif'
-        });
+    // Only alert if from a DIFFERENT user
+    if (previous.userId !== userId) {
+      console.log('   🔴 DUPLICATE DETECTED!');
+      console.log('      Original sender:', previous.userName);
+      console.log('      Original time:', formatDate(previous.timestamp));
+      
+      // Create warning message
+      const warningMessage = `
+⚠️ <b>PESAN DUPLIKAT TERDETEKSI!</b>
+
+📝 <b>Konten yang sama:</b> ${previous.content}
+
+📋 <b>Sejarah Pesan:</b>
+├─ <b>Pengirim pertama:</b> ${previous.userName} - ${formatDate(previous.timestamp)} (pertama kali)
+└─ <b>Pengirim saat ini:</b> ${userName} - ${formatDate(new Date())} (kali ini)
+
+🔍 <i>Normalized: ${normalizedText.substring(0, 30)}${normalizedText.length > 30 ? '...' : ''}</i>
+      `.trim();
+      
+      // Send warning to the group
+      bot.sendMessage(chatId, warningMessage, {
+        parse_mode: 'HTML',
+        reply_to_message_id: messageId
+      }).then(() => {
+        console.log('   ✅ Warning sent to group');
+      }).catch((error) => {
+        console.error('   ❌ Failed to send warning:', error.message);
+      });
+    } else {
+      console.log('   ⏩ Same user, updating timestamp');
     }
-
-    const botHistory = messageHistory.get(botToken);
-    let totalMessages = 0;
-    
-    if (botHistory) {
-        for (const chatHistory of botHistory.values()) {
-            totalMessages += chatHistory.size;
-        }
+  } else {
+    console.log('   ✅ New unique message');
+  }
+  
+  // Store/update this message in history
+  chatHistory[normalizedText] = {
+    userId: userId,
+    userName: userName,
+    content: messageText,
+    normalized: normalizedText,
+    timestamp: new Date()
+  };
+  
+  // Clean up old entries (keep only last 50 messages per chat)
+  const entries = Object.entries(chatHistory);
+  if (entries.length > 50) {
+    // Sort by timestamp and remove oldest
+    const sorted = entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+    for (let i = 50; i < sorted.length; i++) {
+      delete chatHistory[sorted[i][0]];
     }
-
-    res.json({
-        active: true,
-        totalMessages: totalMessages,
-        activeChats: botHistory ? botHistory.size : 0
-    });
+    console.log('   🧹 Cleaned up old messages');
+  }
 });
 
-// Endpoint untuk test webhook
-app.post('/api/bot/test', async (req, res) => {
-    try {
-        const { botToken, chatId, message } = req.body;
-        
-        if (!botToken || !chatId) {
-            return res.status(400).json({ error: 'botToken dan chatId diperlukan' });
-        }
-
-        const bot = activeBots.get(botToken);
-        
-        if (!bot) {
-            return res.status(400).json({ error: 'Bot tidak aktif' });
-        }
-
-        const testMessage = message || 'Test message from bot manager';
-        await bot.sendMessage(chatId, testMessage);
-        
-        res.json({
-            success: true,
-            message: 'Test message sent'
-        });
-
-    } catch (error) {
-        console.error('Error sending test:', error.message);
-        res.status(500).json({ 
-            error: 'Gagal mengirim test',
-            details: error.message 
-        });
-    }
+// Error handling
+bot.on('polling_error', (error) => {
+  console.error('🔴 POLLING ERROR:', error.message);
+  console.error('Code:', error.code);
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        activeBots: activeBots.size,
-        uptime: process.uptime()
-    });
+bot.on('error', (error) => {
+  console.error('🔴 BOT ERROR:', error.message);
 });
 
-// Serve frontend
-app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html lang="id">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Telegram Bot Manager - Deteksi Duplikat</title>
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    padding: 20px;
-                }
-                .container {
-                    max-width: 800px;
-                    margin: 0 auto;
-                    background: white;
-                    border-radius: 20px;
-                    padding: 40px;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                }
-                h1 { color: #333; margin-bottom: 10px; }
-                .subtitle { color: #666; margin-bottom: 30px; }
-                .card {
-                    background: #f7fafc;
-                    border-radius: 15px;
-                    padding: 25px;
-                    margin-bottom: 25px;
-                }
-                .form-group {
-                    margin-bottom: 20px;
-                }
-                label {
-                    display: block;
-                    margin-bottom: 8px;
-                    font-weight: 600;
-                    color: #333;
-                }
-                input {
-                    width: 100%;
-                    padding: 12px 15px;
-                    border: 2px solid #e0e0e0;
-                    border-radius: 10px;
-                    font-size: 16px;
-                }
-                input:focus {
-                    outline: none;
-                    border-color: #667eea;
-                }
-                .btn {
-                    background: #667eea;
-                    color: white;
-                    border: none;
-                    padding: 15px 30px;
-                    border-radius: 10px;
-                    font-size: 16px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    width: 100%;
-                    margin-top: 10px;
-                    transition: background 0.3s;
-                }
-                .btn:hover { background: #5a67d8; }
-                .btn-success { background: #48bb78; }
-                .btn-success:hover { background: #38a169; }
-                .btn-danger { background: #f56565; }
-                .btn-danger:hover { background: #e53e3e; }
-                .status {
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 20px 0;
-                    font-weight: 600;
-                    text-align: center;
-                }
-                .status-active { background: #c6f6d5; color: #22543d; border: 2px solid #9ae6b4; }
-                .status-inactive { background: #fed7d7; color: #742a2a; border: 2px solid #fc8181; }
-                .hidden { display: none; }
-                .log {
-                    background: #2d3748;
-                    color: #e2e8f0;
-                    padding: 15px;
-                    border-radius: 10px;
-                    font-family: 'Courier New', monospace;
-                    font-size: 14px;
-                    max-height: 300px;
-                    overflow-y: auto;
-                    margin-top: 20px;
-                }
-                .example {
-                    background: #fffaf0;
-                    border-left: 4px solid #ed8936;
-                    padding: 15px;
-                    margin: 20px 0;
-                    border-radius: 0 10px 10px 0;
-                }
-                #logs { white-space: pre-wrap; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🤖 Telegram Bot Manager</h1>
-                <p class="subtitle">Deteksi Pesan Duplikat dalam Grup Telegram</p>
-                
-                <div class="card">
-                    <h2>⚙️ Konfigurasi Bot</h2>
-                    <div class="form-group">
-                        <label for="botToken">Token Bot Telegram:</label>
-                        <input type="password" id="botToken" 
-                               placeholder="Contoh: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz">
-                        <small style="color: #666; display: block; margin-top: 5px;">
-                            Dapatkan token dari <a href="https://t.me/BotFather" target="_blank">@BotFather</a>
-                        </small>
-                    </div>
-                    
-                    <div id="botStatus" class="status status-inactive">
-                        ⚪ Bot tidak aktif
-                    </div>
-                    
-                    <button id="startBtn" class="btn" onclick="startBot()">
-                        🚀 Aktifkan Bot
-                    </button>
-                    <button id="stopBtn" class="btn btn-danger hidden" onclick="stopBot()">
-                        ⏹️ Hentikan Bot
-                    </button>
-                    
-                    <div id="botInfo" class="hidden" style="margin-top: 20px;">
-                        <h3>📊 Info Bot:</h3>
-                        <p><strong>ID Bot:</strong> <span id="botId">-</span></p>
-                        <p><strong>Status:</strong> <span id="statusText">-</span></p>
-                        <p><strong>Pesan Dipantau:</strong> <span id="messageCount">0</span></p>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <h2>📝 Contoh Deteksi</h2>
-                    <div class="example">
-                        <p><strong>Contoh pesan duplikat:</strong></p>
-                        <p>User A: "+62 881-0376-00892" (2026/01/01 14:05:26)</p>
-                        <p>User B: "+62 881-0376-00892" (2026/02/08 18:24:02)</p>
-                        <hr style="margin: 10px 0; border: 1px solid #e2e8f0;">
-                        <p><strong>Bot akan membalas:</strong></p>
-                        <p>⚠️ <b>Ini sudah tercatat</b></p>
-                        <p><b>Konten yang terulang:</b> 62881037600892</p>
-                        <p><b>Rekam sejarah:</b></p>
-                        <p>• Pengirim pertama: User A - 2026/01/01 14:05:26 (pertama kali)</p>
-                        <p>• Pengirim saat ini: User B - 2026/02/08 18:24:02 (kali ini)</p>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <h2>📋 Log Aktivitas</h2>
-                    <div class="log" id="logContent">
-                        <div id="logs">Menunggu aktivitas...</div>
-                    </div>
-                    <button class="btn" onclick="clearLogs()" style="margin-top: 10px;">
-                        🗑️ Hapus Log
-                    </button>
-                </div>
-                
-                <div class="card">
-                    <h2>📚 Instruksi</h2>
-                    <ol style="margin-left: 20px; color: #666;">
-                        <li>Dapatkan token dari @BotFather di Telegram</li>
-                        <li>Masukkan token dan klik "Aktifkan Bot"</li>
-                        <li>Temukan bot Anda di Telegram (username: @namabot Anda)</li>
-                        <li>Tambahkan bot ke grup yang ingin dipantau</li>
-                        <li>Berikan izin admin untuk membaca pesan</li>
-                        <li>Bot akan otomatis mendeteksi pesan duplikat</li>
-                        <li>Coba kirim pesan yang sama dari dua pengguna berbeda</li>
-                    </ol>
-                </div>
-            </div>
-            
-            <script>
-                let currentBotToken = '';
-                
-                // Fungsi untuk menambah log
-                function addLog(message) {
-                    const logs = document.getElementById('logs');
-                    const time = new Date().toLocaleTimeString();
-                    logs.innerHTML = `<div>[${time}] ${message}</div>` + logs.innerHTML;
-                }
-                
-                // Fungsi untuk membersihkan log
-                function clearLogs() {
-                    document.getElementById('logs').innerHTML = 'Log berhasil dibersihkan';
-                }
-                
-                // Fungsi untuk memulai bot
-                async function startBot() {
-                    const token = document.getElementById('botToken').value.trim();
-                    
-                    if (!token) {
-                        alert('Masukkan token bot terlebih dahulu!');
-                        return;
-                    }
-                    
-                    if (!token.includes(':')) {
-                        alert('Format token tidak valid! Harus seperti: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz');
-                        return;
-                    }
-                    
-                    try {
-                        addLog('Mengaktifkan bot...');
-                        
-                        const response = await fetch('/api/bot/start', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                botToken: token
-                            })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            currentBotToken = token;
-                            
-                            // Update UI
-                            document.getElementById('botStatus').className = 'status status-active';
-                            document.getElementById('botStatus').innerHTML = '✅ Bot aktif';
-                            document.getElementById('startBtn').classList.add('hidden');
-                            document.getElementById('stopBtn').classList.remove('hidden');
-                            document.getElementById('botInfo').classList.remove('hidden');
-                            
-                            document.getElementById('botId').textContent = data.botInfo.id;
-                            document.getElementById('statusText').textContent = 'Aktif';
-                            
-                            addLog(`✅ Bot "${data.botInfo.name}" berhasil diaktifkan!`);
-                            addLog(`ID Bot: ${data.botInfo.id}`);
-                            addLog('Sekarang tambahkan bot ke grup Telegram Anda');
-                            addLog('Pastikan bot memiliki izin admin untuk membaca pesan');
-                            
-                            // Mulai polling status
-                            startStatusPolling();
-                            
-                        } else {
-                            throw new Error(data.error || 'Gagal mengaktifkan bot');
-                        }
-                    } catch (error) {
-                        addLog(`❌ Error: ${error.message}`);
-                        alert('Gagal mengaktifkan bot: ' + error.message);
-                    }
-                }
-                
-                // Fungsi untuk menghentikan bot
-                async function stopBot() {
-                    if (!confirm('Apakah Anda yakin ingin menghentikan bot?')) {
-                        return;
-                    }
-                    
-                    try {
-                        addLog('Menghentikan bot...');
-                        
-                        const response = await fetch('/api/bot/stop', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                botToken: currentBotToken
-                            })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                            // Update UI
-                            document.getElementById('botStatus').className = 'status status-inactive';
-                            document.getElementById('botStatus').innerHTML = '⚪ Bot tidak aktif';
-                            document.getElementById('startBtn').classList.remove('hidden');
-                            document.getElementById('stopBtn').classList.add('hidden');
-                            document.getElementById('botInfo').classList.add('hidden');
-                            
-                            addLog('✅ Bot berhasil dihentikan');
-                            currentBotToken = '';
-                        }
-                    } catch (error) {
-                        addLog(`❌ Error menghentikan bot: ${error.message}`);
-                    }
-                }
-                
-                // Fungsi untuk polling status bot
-                function startStatusPolling() {
-                    if (!currentBotToken) return;
-                    
-                    const poll = async () => {
-                        try {
-                            const response = await fetch(\`/api/bot/status/\${encodeURIComponent(currentBotToken)}\`);
-                            const data = await response.ok ? await response.json() : { active: false };
-                            
-                            if (data.active) {
-                                document.getElementById('messageCount').textContent = data.totalMessages || 0;
-                            }
-                        } catch (error) {
-                            console.log('Polling error:', error);
-                        }
-                    };
-                    
-                    // Poll setiap 10 detik
-                    poll();
-                    setInterval(poll, 10000);
-                }
-                
-                // Test koneksi saat halaman dimuat
-                window.onload = async () => {
-                    try {
-                        const response = await fetch('/api/health');
-                        if (response.ok) {
-                            addLog('✅ Terhubung ke server');
-                        }
-                    } catch (error) {
-                        addLog('❌ Tidak dapat terhubung ke server');
-                    }
-                };
-                
-                // Simulasikan duplikat untuk testing
-                window.testDuplicate = () => {
-                    addLog('🚀 Simulasi: User A mengirim "+62 881-0376-00892"');
-                    setTimeout(() => {
-                        addLog('🚀 Simulasi: User B mengirim "+62 881-0376-00892" (DUPLIKAT!)');
-                        setTimeout(() => {
-                            addLog('⚠️ BOT: Duplikat terdeteksi! Mengirim peringatan...');
-                        }, 1000);
-                    }, 2000);
-                };
-            </script>
-        </body>
-        </html>
-    `);
+// Keep Replit alive (ping every 5 minutes)
+setInterval(() => {
+  console.log('💓 Bot heartbeat:', new Date().toLocaleTimeString());
+}, 5 * 60 * 1000);
+
+// Simple HTTP server to keep Replit awake
+const http = require('http');
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'online',
+    bot: 'Telegram Duplicate Detector',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  }));
 });
 
-// Export untuk Vercel
-module.exports = app;
+server.listen(3000, () => {
+  console.log('🌐 HTTP server listening on port 3000');
+});
