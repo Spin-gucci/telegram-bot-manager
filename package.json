@@ -1,18 +1,16 @@
 {
   "name": "telegram-bot-manager",
   "version": "1.0.0",
-  "description": "Telegram Bot Manager for duplicate message detection",
+  "description": "Telegram Bot untuk deteksi pesan duplikat",
   "main": "api/index.js",
   "scripts": {
-    "start": "node api/index.js",
-    "vercel-build": "npm install --production=false && npm prune --production"
+    "start": "node api/index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
     "node-telegram-bot-api": "^0.64.0",
-    "sqlite3": "^5.1.6"
+    "dotenv": "^16.3.1"
   },
   "engines": {
     "node": ">=18.0.0"
