@@ -1,333 +1,328 @@
 const express = require('express');
 const cors = require('cors');
-
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-// Store active bots in memory (will reset on cold start)
-let activeBots = {};
-
-// Simple test endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'Server is running',
-    timestamp: new Date().toISOString(),
-    activeBots: Object.keys(activeBots).length
-  });
+  res.json({ status: 'OK', time: new Date().toISOString() });
 });
 
-// Start bot endpoint
-app.post('/api/start', async (req, res) => {
-  try {
-    const { token } = req.body;
-    
-    if (!token) {
-      return res.status(400).json({ error: 'Token is required' });
-    }
-    
-    console.log('Starting bot with token:', token.substring(0, 10) + '...');
-    
-    // Store bot as active
-    activeBots[token] = {
-      token: token,
-      active: true,
-      startedAt: new Date(),
-      lastUpdate: new Date()
-    };
-    
-    // Return instructions for setting up the bot
-    res.json({
-      success: true,
-      message: 'Bot setup instructions',
-      instructions: [
-        '1. Bot token received successfully',
-        '2. Add the bot to your Telegram group',
-        '3. Make the bot an admin with "Read Messages" permission',
-        '4. The bot will use polling to detect duplicates'
-      ],
-      nextSteps: [
-        'Go to Telegram and find your bot',
-        'Add it to your group',
-        'Promote to admin with read permissions'
-      ],
-      tokenPreview: token.substring(0, 15) + '...'
-    });
-    
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get bot status
-app.get('/api/status/:token', (req, res) => {
-  const token = req.params.token;
-  const bot = activeBots[token];
-  
-  if (!bot) {
-    return res.status(404).json({ error: 'Bot not found' });
-  }
-  
-  res.json({
-    active: bot.active,
-    startedAt: bot.startedAt,
-    lastUpdate: bot.lastUpdate,
-    uptime: Date.now() - new Date(bot.startedAt).getTime()
-  });
-});
-
-// Webhook simulation endpoint
-app.post('/api/webhook/:token', (req, res) => {
-  const token = req.params.token;
-  const update = req.body;
-  
-  console.log('Webhook received for token:', token.substring(0, 10) + '...');
-  
-  // Process message if present
-  if (update.message) {
-    const msg = update.message;
-    console.log('Message from:', msg.from?.username, 'Text:', msg.text?.substring(0, 50));
-  }
-  
-  res.json({ received: true });
-});
-
-// Serve HTML frontend
 app.get('/', (req, res) => {
-  const html = `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Duplicate Bot</title>
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        padding: 20px;
-      }
-      .container {
-        max-width: 500px;
-        margin: 0 auto;
-        background: white;
-        border-radius: 15px;
-        padding: 30px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-      }
-      h1 {
-        color: #333;
-        margin-bottom: 10px;
-        text-align: center;
-      }
-      .subtitle {
-        color: #666;
-        text-align: center;
-        margin-bottom: 30px;
-      }
-      .form-group {
-        margin-bottom: 20px;
-      }
-      label {
-        display: block;
-        margin-bottom: 8px;
-        color: #333;
-        font-weight: 600;
-      }
-      input {
-        width: 100%;
-        padding: 12px 15px;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        font-size: 16px;
-      }
-      input:focus {
-        outline: none;
-        border-color: #667eea;
-      }
-      .btn {
-        width: 100%;
-        padding: 15px;
-        background: #667eea;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-        margin: 10px 0;
-      }
-      .btn:hover {
-        background: #5a67d8;
-      }
-      .btn-success {
-        background: #10b981;
-      }
-      .btn-success:hover {
-        background: #059669;
-      }
-      .status {
-        padding: 15px;
-        border-radius: 8px;
-        margin: 20px 0;
-        text-align: center;
-        font-weight: 600;
-      }
-      .status-active {
-        background: #d1fae5;
-        color: #065f46;
-        border: 2px solid #a7f3d0;
-      }
-      .status-inactive {
-        background: #fee2e2;
-        color: #991b1b;
-        border: 2px solid #fca5a5;
-      }
-      .instructions {
-        background: #f8fafc;
-        padding: 20px;
-        border-radius: 8px;
-        margin-top: 20px;
-        color: #4b5563;
-      }
-      .instructions h3 {
-        color: #374151;
-        margin-bottom: 10px;
-      }
-      .instructions ol {
-        margin-left: 20px;
-      }
-      .instructions li {
-        margin-bottom: 8px;
-      }
-      .log {
-        background: #1f2937;
-        color: #d1d5db;
-        padding: 15px;
-        border-radius: 8px;
-        font-family: monospace;
-        font-size: 14px;
-        margin-top: 20px;
-        max-height: 200px;
-        overflow-y: auto;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>🤖 Telegram Duplicate Bot</h1>
-      <p class="subtitle">Detect duplicate messages in Telegram groups</p>
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Telegram Duplicate Bot</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .step { background: #f0f9ff; padding: 15px; margin: 10px 0; border-radius: 10px; border-left: 4px solid #3b82f6; }
+        .important { background: #fef3c7; border-left: 4px solid #f59e0b; }
+        code { background: #1f2937; color: white; padding: 2px 5px; border-radius: 3px; }
+      </style>
+    </head>
+    <body>
+      <h1>🤖 Telegram Duplicate Message Bot</h1>
       
-      <div class="form-group">
-        <label for="token">Bot Token:</label>
-        <input type="password" id="token" placeholder="1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz">
-        <small style="color: #666; display: block; margin-top: 5px;">
-          Get from <a href="https://t.me/BotFather" target="_blank">@BotFather</a>
-        </small>
+      <div class="step">
+        <h2>📋 Step 1: Get Bot Token</h2>
+        <p>1. Open Telegram, search <code>@BotFather</code></p>
+        <p>2. Send: <code>/newbot</code></p>
+        <p>3. Follow instructions, get token like: <code>1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz</code></p>
       </div>
       
-      <div id="status" class="status status-inactive">
-        ⚪ Bot not active
-      </div>
-      
-      <button class="btn" onclick="startBot()">🚀 Start Bot</button>
-      <button class="btn btn-success" onclick="openTelegram()">📱 Open Telegram</button>
-      
-      <div class="instructions">
-        <h3>📚 How to setup:</h3>
+      <div class="step">
+        <h2>🚀 Step 2: Run Bot on Replit</h2>
+        <p>Click this button to run your bot:</p>
+        <a href="https://replit.com/@yourusername/telegram-duplicate-bot" target="_blank" 
+           style="background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">
+          ▶️ Run Bot on Replit
+        </a>
+        <p>Or manually:</p>
         <ol>
-          <li>Get bot token from @BotFather</li>
-          <li>Paste token above and click "Start Bot"</li>
-          <li>Find your bot in Telegram</li>
-          <li>Add bot to your group</li>
-          <li>Make bot admin with "Read Messages" permission</li>
+          <li>Go to <a href="https://replit.com" target="_blank">Replit.com</a></li>
+          <li>Create new Node.js project</li>
+          <li>Copy code below</li>
+          <li>Add token in Secrets</li>
+          <li>Click Run</li>
         </ol>
       </div>
       
-      <div class="log" id="log">
-        Ready to start...
+      <div class="step important">
+        <h2>⚠️ Step 3: ADD BOT TO GROUP (CRITICAL)</h2>
+        <p><strong>After bot is running on Replit:</strong></p>
+        <ol>
+          <li>Find your bot in Telegram (search username from @BotFather)</li>
+          <li>Add bot to your group</li>
+          <li><strong>MAKE BOT ADMIN:</strong> Click bot name → More → Promote to Admin</li>
+          <li><strong>CHECK PERMISSIONS:</strong> ✓ Post messages ✓ Read messages</li>
+        </ol>
       </div>
-    </div>
-    
-    <script>
-      function log(message) {
-        const logDiv = document.getElementById('log');
-        const time = new Date().toLocaleTimeString();
-        logDiv.innerHTML = \`[\${time}] \${message}<br>\` + logDiv.innerHTML;
-      }
       
-      async function startBot() {
-        const token = document.getElementById('token').value.trim();
-        
-        if (!token) {
-          alert('Please enter bot token');
-          return;
-        }
-        
-        if (!token.includes(':')) {
-          alert('Invalid token format. Should be like: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz');
-          return;
-        }
-        
-        log('Starting bot...');
-        
-        try {
-          const response = await fetch('/api/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token })
-          });
-          
-          const data = await response.json();
-          
-          if (data.success) {
-            document.getElementById('status').className = 'status status-active';
-            document.getElementById('status').innerHTML = '✅ Bot setup started';
-            
-            log('✅ Bot setup initiated');
-            log('Follow these steps:');
-            data.instructions.forEach(step => log(step));
-            
-            // Show Telegram instructions
-            setTimeout(() => {
-              alert('Now go to Telegram and add the bot to your group!');
-            }, 1000);
-            
-          } else {
-            throw new Error(data.error || 'Failed to start bot');
-          }
-          
-        } catch (error) {
-          log(\`❌ Error: \${error.message}\`);
-          alert(\`Error: \${error.message}\`);
-        }
-      }
-      
-      function openTelegram() {
-        window.open('https://t.me/BotFather', '_blank');
-      }
-      
-      // Test connection on load
-      window.onload = async () => {
-        try {
-          const response = await fetch('/api/health');
-          const data = await response.json();
-          log(\`✅ Connected to server (v\${data.timestamp})\`);
-        } catch (error) {
-          log('❌ Cannot connect to server');
-        }
-      };
-    </script>
-  </body>
-  </html>
-  `;
-  
-  res.send(html);
+      <div class="step">
+        <h2>🔧 Bot Code for Replit:</h2>
+        <pre style="background: #1f2937; color: white; padding: 15px; border-radius: 8px; overflow: auto;">
+const TelegramBot = require('node-telegram-bot-api');
+
+// Get token from environment variable
+const token = process.env.BOT_TOKEN;
+
+if (!token) {
+  console.error('❌ ERROR: BOT_TOKEN not set!');
+  console.error('Add BOT_TOKEN in Replit Secrets');
+  process.exit(1);
+}
+
+console.log('🤖 Starting bot with token:', token.substring(0, 15) + '...');
+
+// Create bot with polling
+const bot = new TelegramBot(token, { 
+  polling: { 
+    interval: 1000,  // Check every second
+    timeout: 10,
+    params: { 
+      timeout: 10 
+    }
+  } 
 });
 
-// Export for Vercel
+// Store message history
+const messageHistory = new Map(); // chatId -> {normalizedText: {userId, userName, time}}
+
+// Normalize message (remove spaces, dashes, lowercase)
+function normalizeText(text) {
+  return text
+    .replace(/\\s+/g, '')      // Remove spaces
+    .replace(/[-+()]/g, '')    // Remove dashes, plus, parentheses
+    .toLowerCase()             // Convert to lowercase
+    .trim();                   // Trim whitespace
+}
+
+// Format duplicate warning
+function createWarning(original, duplicate) {
+  const formatTime = (date) => {
+    return date.toLocaleString('id-ID', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+  
+  return \`
+⚠️ <b>PESAN DUPLIKAT TERDETEKSI!</b>
+
+📝 <b>Konten yang sama:</b> \${original.content}
+
+📋 <b>Sejarah:</b>
+├─ <b>Pertama dikirim:</b> \${original.user} (\${formatTime(original.time)})
+└─ <b>Sekarang dikirim:</b> \${duplicate.user} (\${formatTime(duplicate.time)})
+
+<i>Normalized: \${original.normalized}</i>
+  \`.trim();
+}
+
+// When bot receives message
+bot.on('message', async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const userName = msg.from.first_name || msg.from.username || 'Unknown';
+    const messageText = msg.text || '';
+    const messageId = msg.message_id;
+    
+    console.log(\`\\n📨 Message received in chat \${chatId}:\`);
+    console.log(\`   From: \${userName} (\${userId})\`);
+    console.log(\`   Text: "\${messageText}"\`);
+    console.log(\`   Chat type: \${msg.chat.type}\`);
+    console.log(\`   Is group: \${msg.chat.type === 'group' || msg.chat.type === 'supergroup'}\`);
+    
+    // Skip if:
+    // 1. No text
+    if (!messageText.trim()) {
+      console.log('   ⏩ Skipped: Empty message');
+      return;
+    }
+    
+    // 2. From bot itself
+    if (msg.from.is_bot) {
+      console.log('   ⏩ Skipped: From bot');
+      return;
+    }
+    
+    // 3. Not in group (optional, bot can work in private too)
+    const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+    if (!isGroup) {
+      console.log('   ⏩ Skipped: Not a group message');
+      await bot.sendMessage(chatId, 'Bot ini bekerja di grup. Tambahkan saya ke grup untuk deteksi duplikat!');
+      return;
+    }
+    
+    // Normalize the message
+    const normalized = normalizeText(messageText);
+    console.log(\`   Normalized: "\${normalized}"\`);
+    
+    // Initialize chat history if needed
+    if (!messageHistory.has(chatId)) {
+      messageHistory.set(chatId, new Map());
+      console.log(\`   Created history for chat \${chatId}\`);
+    }
+    
+    const chatHistory = messageHistory.get(chatId);
+    
+    // Check for duplicate (same normalized text)
+    if (chatHistory.has(normalized)) {
+      const previous = chatHistory.get(normalized);
+      
+      // Only alert if from DIFFERENT user
+      if (previous.userId !== userId) {
+        console.log(\`   🔴 DUPLICATE DETECTED! Previous sender: \${previous.userName}\`);
+        
+        // Create warning message
+        const warning = createWarning(
+          {
+            content: previous.content,
+            user: previous.userName,
+            time: previous.time,
+            normalized: normalized
+          },
+          {
+            content: messageText,
+            user: userName,
+            time: new Date(),
+            normalized: normalized
+          }
+        );
+        
+        // Send warning to group
+        try {
+          await bot.sendMessage(chatId, warning, {
+            parse_mode: 'HTML',
+            reply_to_message_id: messageId
+          });
+          console.log('   ✅ Warning sent to group');
+        } catch (sendError) {
+          console.log('   ❌ Failed to send warning:', sendError.message);
+        }
+      } else {
+        console.log('   ⏩ Same user, no warning');
+      }
+    } else {
+      console.log('   ✅ New unique message');
+    }
+    
+    // Always store/update the message (for future detection)
+    chatHistory.set(normalized, {
+      userId: userId,
+      userName: userName,
+      content: messageText,
+      normalized: normalized,
+      time: new Date()
+    });
+    
+    // Limit history size (keep last 100 messages per chat)
+    if (chatHistory.size > 100) {
+      const firstKey = chatHistory.keys().next().value;
+      chatHistory.delete(firstKey);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error processing message:', error.message);
+  }
+});
+
+// Bot started successfully
+bot.on('polling_error', (error) => {
+  console.error('🔴 Polling error:', error.message);
+});
+
+bot.on('error', (error) => {
+  console.error('🔴 Bot error:', error.message);
+});
+
+// Get bot info when started
+bot.getMe().then(botInfo => {
+  console.log('\\n✅ Bot started successfully!');
+  console.log(\`   Name: \${botInfo.first_name}\`);
+  console.log(\`   Username: @\${botInfo.username}\`);
+  console.log(\`   ID: \${botInfo.id}\`);
+  console.log('\\n📋 NEXT STEPS:');
+  console.log('   1. Find your bot in Telegram: @' + botInfo.username);
+  console.log('   2. Add bot to your group');
+  console.log('   3. MAKE BOT ADMIN with READ permission');
+  console.log('   4. Test by sending duplicate messages');
+  console.log('\\n📡 Bot is now listening for messages...');
+}).catch(error => {
+  console.error('❌ Failed to get bot info:', error.message);
+  console.log('\\n🔧 TROUBLESHOOTING:');
+  console.log('   - Check if token is correct');
+  console.log('   - Check internet connection');
+  console.log('   - Token format: 1234567890:ABCdefGhIJKlmNoPQRsTUVwxyz');
+});
+
+// Keep Replit alive
+const http = require('http');
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Bot is running on Replit');
+}).listen(8080);
+
+console.log('🌐 HTTP server started on port 8080');
+        </pre>
+      </div>
+      
+      <div class="step important">
+        <h2>🔍 TESTING INSTRUCTIONS:</h2>
+        <p>To test if bot is reading messages:</p>
+        <ol>
+          <li>Go to Replit console (output tab)</li>
+          <li>Send message in Telegram group</li>
+          <li>Check Replit console - should show "Message received"</li>
+          <li>If no output, bot is NOT reading messages</li>
+        </ol>
+      </div>
+      
+      <div class="step">
+        <h2>🛠️ TROUBLESHOOTING:</h2>
+        <p><strong>Problem: No messages in Replit console</strong></p>
+        <p><strong>Solution:</strong></p>
+        <ol>
+          <li><strong>CHECK ADMIN STATUS:</strong> Bot MUST be admin with READ permission</li>
+          <li><strong>CHECK GROUP TYPE:</strong> Group must be "Group" or "Supergroup"</li>
+          <li><strong>CHECK BOT IS RUNNING:</strong> Replit console should show "Bot started"</li>
+          <li><strong>CHECK TOKEN:</strong> Verify token is correct in Replit Secrets</li>
+          <li><strong>TEST MANUALLY:</strong> Try messaging bot directly (not in group)</li>
+        </ol>
+      </div>
+      
+      <script>
+        // Simple test function
+        function testBot() {
+          const steps = [
+            "1. Bot token valid?",
+            "2. Bot running on Replit?",
+            "3. Bot added to group?",
+            "4. Bot is ADMIN?",
+            "5. Bot has READ permission?",
+            "6. Send test message in group",
+            "7. Check Replit console for output"
+          ];
+          
+          alert("Checklist:\\n\\n" + steps.join("\\n"));
+        }
+      </script>
+      
+      <button onclick="testBot()" style="background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px;">
+        🧪 Run Bot Test Checklist
+      </button>
+    </body>
+    </html>
+  `);
+});
+
 module.exports = app;
